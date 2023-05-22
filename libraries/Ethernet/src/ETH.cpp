@@ -232,6 +232,7 @@ bool ETHClass::begin(uint8_t phy_addr, int power, int mdc, int mdio, eth_phy_typ
 #if ESP_IDF_VERSION_MAJOR > 3
     eth_clock_mode = clock_mode;
     tcpipInit();
+        esp_netif_t *eth_netif = NULL;
 
     if (use_mac_from_efuse)
     {
@@ -241,9 +242,35 @@ bool ETHClass::begin(uint8_t phy_addr, int power, int mdc, int mdio, eth_phy_typ
     }
 
     tcpip_adapter_set_default_eth_handlers();
-    
-    esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
-    esp_netif_t *eth_netif = esp_netif_new(&cfg);
+
+    if (!dhcps) {
+      esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
+      eth_netif = esp_netif_new(&cfg);
+    }
+    else {
+            uint32_t startIP = (uint32_t)dhcpsSettings.startIP;
+            uint32_t subnet = (uint32_t)dhcpsSettings.subnet;
+            uint32_t gateway = (uint32_t)dhcpsSettings.gateway;
+
+      const esp_netif_ip_info_t my_ap_ip = {
+      .ip = {.addr = startIP },
+      .netmask = {.addr = subnet },
+      .gw = {.addr = gateway },
+      };
+
+      const esp_netif_inherent_config_t eth_behav_cfg = {
+              .flags = (esp_netif_flags_t) (ESP_NETIF_DHCP_SERVER | ESP_NETIF_FLAG_AUTOUP),
+              .ip_info = (esp_netif_ip_info_t*)&my_ap_ip,
+              .get_ip_event = ARDUINO_EVENT_ETH_GOT_IP,
+              .lost_ip_event = 0,
+              .if_key = "ETHDHCPS",
+              .if_desc = "eth",
+              .route_prio = 50,
+      };
+
+      esp_netif_config_t cfg = { .base = & eth_behav_cfg, .stack = ESP_NETIF_NETSTACK_DEFAULT_ETH };
+      eth_netif = esp_netif_new(&cfg);
+    }
 
     esp_eth_mac_t *eth_mac = NULL;
 #if CONFIG_ETH_SPI_ETHERNET_DM9051
@@ -416,7 +443,7 @@ bool ETHClass::config(IPAddress local_ip, IPAddress gateway, IPAddress subnet, I
         info.ip.addr = 0;
         info.gw.addr = 0;
         info.netmask.addr = 0;
-	}
+    }
 
     err = tcpip_adapter_dhcpc_stop(TCPIP_ADAPTER_IF_ETH);
     if(err != ESP_OK && err != ESP_ERR_TCPIP_ADAPTER_DHCP_ALREADY_STOPPED){
@@ -457,6 +484,28 @@ bool ETHClass::config(IPAddress local_ip, IPAddress gateway, IPAddress subnet, I
     }
 
     return true;
+}
+
+bool ETHClass::dhcpsConfig(IPAddress localStartIp, IPAddress gateway, IPAddress subnet)
+{
+  dhcpsSettings.startIP = localStartIp;
+  dhcpsSettings.gateway = gateway;
+  dhcpsSettings.subnet = subnet;
+
+  return true;
+}
+bool ETHClass::enableDHCPServer(IPAddress localStartIp, IPAddress gateway, IPAddress subnet)
+{
+  dhcps = true;
+
+  return dhcpsConfig(localStartIp, gateway, subnet);
+}
+
+bool ETHClass::disableDHCPServer()
+{
+  dhcps = false;
+
+  return true;
 }
 
 IPAddress ETHClass::localIP()

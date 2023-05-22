@@ -60,6 +60,15 @@ class ETHClass {
     private:
         bool initialized;
         bool staticIP;
+        bool dhcps;
+        struct dhcpsCfg {
+          IPAddress startIP;
+          IPAddress endIP;
+          IPAddress gateway;
+          IPAddress subnet;
+        };
+
+        dhcpsCfg dhcpsSettings;
 #if ESP_IDF_VERSION_MAJOR > 3
         esp_eth_handle_t eth_handle;
 
@@ -76,10 +85,14 @@ class ETHClass {
 
         bool begin(uint8_t phy_addr=ETH_PHY_ADDR, int power=ETH_PHY_POWER, int mdc=ETH_PHY_MDC, int mdio=ETH_PHY_MDIO, eth_phy_type_t type=ETH_PHY_TYPE, eth_clock_mode_t clk_mode=ETH_CLK_MODE, bool use_mac_from_efuse=false);
 
-        bool config(IPAddress local_ip, IPAddress gateway, IPAddress subnet, IPAddress dns1 = (uint32_t)0x00000000, IPAddress dns2 = (uint32_t)0x00000000);
+        bool config(IPAddress local_ip, IPAddress gateway, IPAddress subnet,
+                    IPAddress dns1 = (uint32_t)0x00000000,
+                    IPAddress dns2 = (uint32_t)0x00000000);
 
-        const char * getHostname();
-        bool setHostname(const char * hostname);
+        bool dhcpsConfig(IPAddress localStartIp, IPAddress gateway, IPAddress subnet);
+
+        const char *getHostname();
+        bool setHostname(const char *hostname);
 
         bool fullDuplex();
         bool linkUp();
@@ -97,7 +110,10 @@ class ETHClass {
         IPAddress networkID();
         uint8_t subnetCIDR();
 
-        uint8_t * macAddress(uint8_t* mac);
+        bool disableDHCPServer();
+        bool enableDHCPServer(IPAddress localStartIp, IPAddress gateway, IPAddress subnet);
+
+        uint8_t *macAddress(uint8_t *mac);
         String macAddress();
 
         friend class WiFiClient;
